@@ -8,56 +8,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Probe
-        run: |
-          {
-            echo "### chart feed: which limits/types exist?"
-            for lim in 10 25 50 100 200; do
-              printf "movies/top-movies/%-4s -> " "$lim"
-              curl -sS -o /dev/null -w "%{http_code}\n" \
-                "https://rss.marketingtools.apple.com/api/v2/us/movies/top-movies/$lim/movies.json"
-            done
-            echo
-            echo "### do other media types work (is the API itself alive)?"
-            for p in "apple-music/most-played/10/albums.json" "books/top-free/10/books.json" "podcasts/top/10/podcasts.json" "tv-shows/top-tv-episodes/10/tv-episodes.json" "movies/top-movies/10/movies.json"; do
-              printf "%-45s -> " "$p"
-              curl -sS -o /dev/null -w "%{http_code}\n" "https://rss.marketingtools.apple.com/api/v2/us/$p"
-            done
-            echo
-            echo "### search: Nimrods variations"
-            for q in "Nimrods" "Nimrods+2026" "Nimrods+Lee+Kirk" "Nimrods+movie"; do
-              printf "term=%-20s entity=movie -> " "$q"
-              curl -sS "https://itunes.apple.com/search?term=$q&country=us&entity=movie&limit=5" | python3 -c "
-import sys,json
-try:
-  d=json.load(sys.stdin); print('count',d['resultCount'], [r.get('trackName') for r in d['results']][:5])
-except Exception as e: print('parse error',e)
-"
-            done
-            echo
-            echo "### search with no entity filter"
-            curl -sS "https://itunes.apple.com/search?term=Nimrods&country=us&limit=10" | python3 -c "
-import sys,json
-d=json.load(sys.stdin); print('count',d['resultCount'])
-for r in d['results'][:10]: print('  ',r.get('wrapperType'),'|',r.get('kind'),'|',r.get('trackName') or r.get('collectionName'),'|',r.get('artistName'))
-"
-            echo
-            echo "### lookup the IDs we guessed"
-            for id in 6797577735 1474535185; do
-              printf "id=%-12s -> " "$id"
-              curl -sS "https://itunes.apple.com/lookup?id=$id" | python3 -c "
-import sys,json
-d=json.load(sys.stdin)
-if d['resultCount']: r=d['results'][0]; print(r.get('wrapperType'),'|',r.get('kind'),'|',r.get('trackName') or r.get('collectionName'),'|',r.get('artistName'))
-else: print('no result')
-"
-            done
-          } > diag.txt 2>&1
-          cat diag.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 probe.py
       - name: Commit
         if: always()
         run: |
           git config user.name "itunes-monitor[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add diag.txt
-          git diff --staged --quiet || { git commit -m "diagnostic round 2"; git push; }
+          git diff --staged --quiet || { git commit -m "probe results"; git push; }
