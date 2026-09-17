@@ -1,0 +1,40 @@
+name: Diagnose
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Probe Apple endpoints and capture the real error
+        run: |
+          {
+            echo "=== chart feed ==="
+            curl -sS -o /tmp/chart.json -w "HTTP %{http_code}  bytes=%{size_download}\n" \
+              "https://rss.marketingtools.apple.com/api/v2/us/movies/top-movies/200/movies.json" || echo "curl failed"
+            echo "--- first 400 bytes ---"
+            head -c 400 /tmp/chart.json 2>/dev/null; echo
+            echo
+            echo "=== search api ==="
+            curl -sS -o /tmp/search.json -w "HTTP %{http_code}  bytes=%{size_download}\n" \
+              "https://itunes.apple.com/search?term=Nimrods&country=us&entity=movie&limit=5" || echo "curl failed"
+            echo "--- first 800 bytes ---"
+            head -c 800 /tmp/search.json 2>/dev/null; echo
+            echo
+            echo "=== monitor.py output ==="
+            python3 monitor.py 2>&1 | tail -25
+          } > diag.txt 2>&1
+          cat diag.txt
+      - name: Commit diagnosis
+        if: always()
+        run: |
+          git config user.name "itunes-monitor[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add diag.txt
+          git diff --staged --quiet || { git commit -m "diagnostic output"; git push; }
