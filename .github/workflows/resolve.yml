@@ -1,0 +1,27 @@
+name: Resolve iTunes IDs
+
+# Manual only. Run this from the Actions tab whenever you add a film to
+# config.json and need to confirm which iTunes listing it matches before
+# locking in its itunes_id. Prints candidates to the run log; touches
+# nothing — no state, no history, no email.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Inspect the chart feed
+        run: python3 monitor.py --inspect-chart
+
+      - name: Print iTunes search matches
+        run: python3 monitor.py --resolve-only

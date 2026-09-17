@@ -1,0 +1,56 @@
+name: iTunes chart check
+
+on:
+  schedule:
+    # Hourly at :17 — GitHub recommends avoiding :00, which is heavily congested.
+    # Actions cron is best-effort; runs can be 5-20 min late or occasionally skipped.
+    - cron: "17 * * * *"
+  workflow_dispatch:        # lets you trigger a check by hand from the Actions tab
+
+# Needed so the job can commit state.json / history.json / dashboard.html back to main.
+permissions:
+  contents: write
+
+# If a run is still going when the next hour fires, let it finish rather than
+# racing two commits against each other.
+concurrency:
+  group: itunes-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run chart check
+        env:
+          ITUNES_MONITOR_SMTP_USER: ${{ secrets.ITUNES_MONITOR_SMTP_USER }}
+          ITUNES_MONITOR_SMTP_PASS: ${{ secrets.ITUNES_MONITOR_SMTP_PASS }}
+        run: python3 monitor.py
+
+      - name: Publish dashboard as the Pages index
+        run: cp dashboard.html index.html
+
+      - name: Commit updated state and dashboard
+        run: |
+          git config user.name  "itunes-monitor[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state.json history.json dashboard.html index.html
+          if git diff --staged --quiet; then
+            echo "Nothing changed this run."
+          else
+            git commit -m "chart check $(date -u '+%Y-%m-%d %H:%M UTC')"
+            # Another run may have pushed while this one was working; rebase and retry.
+            git pull --rebase --autostash origin main
+            git push
+          fi

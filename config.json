@@ -1,0 +1,26 @@
+{
+  "storefront": "us",
+  "chart": "top-movies",
+  "chart_limit": 200,
+  "films": [
+    {
+      "name": "Nimrods",
+      "search_term": "Nimrods",
+      "itunes_id": null,
+      "notes": "Set itunes_id once confirmed via the resolver output, to lock in the exact listing and skip fuzzy search matching."
+    }
+  ],
+  "email": {
+    "enabled": true,
+    "to": ["paul@legionm.com"],
+    "from": "paul@legionm.com",
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587,
+    "smtp_user_env": "ITUNES_MONITOR_SMTP_USER",
+    "smtp_pass_env": "ITUNES_MONITOR_SMTP_PASS"
+  },
+  "dashboard_path": "dashboard.html",
+  "state_path": "state.json",
+  "history_path": "history.json",
+  "history_limit": 2000
+}
