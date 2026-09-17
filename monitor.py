@@ -159,6 +159,57 @@ def send_email(cfg, subject, body):
     print(f"[email sent] {subject}")
 
 
+# Kept as a plain (non-f) string so braces need no doubling.
+LIVE_SCRIPT = """
+<script>
+(function () {
+  var REFRESH_MS = 5 * 60 * 1000;
+  function fmt(n, prefix) { return (n === null || n === undefined) ? null : prefix + n; }
+  async function refresh() {
+    try {
+      // Query string busts the GitHub Pages CDN cache; no-store busts the browser's.
+      var r = await fetch('state.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) return;
+      var data = await r.json();
+      document.querySelectorAll('[data-film]').forEach(function (card) {
+        var s = data[card.getAttribute('data-film')];
+        if (!s) return;
+        var set = function (sel, val) {
+          var el = card.querySelector(sel);
+          if (el && val !== null && val !== undefined) el.textContent = val;
+        };
+        var rankEl = card.querySelector('.rank');
+        if (rankEl) {
+          rankEl.textContent = s.rank ? '#' + s.rank : 'Not on chart';
+          rankEl.className = s.rank ? 'rank' : 'rank off';
+        }
+        set('.tile-v', s.genre_rank ? '#' + s.genre_rank : '\\u2014');
+        set('.tile-k', s.genre ? 'in ' + s.genre : '');
+      });
+      var first = data[Object.keys(data)[0]] || {};
+      var foot = document.getElementById('foot');
+      if (foot) {
+        foot.textContent = 'Checked ' + (first.last_checked || '\\u2014') +
+          ' \\u00b7 Apple\\u2019s feed last rebuilt ' + (first.feed_updated || '\\u2014');
+      }
+      var live = document.getElementById('live');
+      if (live) {
+        var t = new Date();
+        live.textContent = 'live \\u00b7 refreshed ' +
+          String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+      }
+    } catch (e) { /* keep whatever was server-rendered */ }
+  }
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) refresh();
+  });
+})();
+</script>
+"""
+
+
 def render_dashboard(cfg, state, history):
     cards = []
     for name, s in state.items():
@@ -170,11 +221,9 @@ def render_dashboard(cfg, state, history):
         rank_display = f"#{rank}" if rank else "Not on chart"
         rank_class = "rank" if rank else "rank off"
 
-        genre_block = ""
-        if genre:
-            gtxt = f"#{grank}" if grank else "—"
-            genre_block = (f'<div class="tile"><div class="tile-v">{escape(gtxt)}</div>'
-                           f'<div class="tile-k">in {escape(genre)}</div></div>')
+        gtxt = f"#{grank}" if grank else "—"
+        genre_block = (f'<div class="tile"><div class="tile-v">{escape(gtxt)}</div>'
+                       f'<div class="tile-k">{escape("in " + genre if genre else "")}</div></div>')
 
         meta = []
         if s.get("price"):
@@ -201,7 +250,7 @@ def render_dashboard(cfg, state, history):
         title_html = (f'<a href="{escape(link)}">{escape(name)}</a>' if link else escape(name))
 
         cards.append(f"""
-      <section class="card">
+      <section class="card" data-film="{escape(name)}">
         <div class="head">
           {art_html}
           <div class="headtext">
@@ -229,6 +278,7 @@ def render_dashboard(cfg, state, history):
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <title>iTunes Chart Monitor</title>
 <style>
   :root {{
@@ -245,7 +295,9 @@ def render_dashboard(cfg, state, history):
   body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
          background:var(--bg); color:var(--ink); margin:0; padding:24px 16px 48px; }}
   .wrap {{ max-width:760px; margin:0 auto; }}
+  .topline {{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }}
   h1 {{ font-size:1.05rem; font-weight:600; letter-spacing:.01em; margin:0 0 4px; }}
+  #live {{ font-size:.7rem; color:var(--muted); white-space:nowrap; }}
   .lede {{ color:var(--muted); font-size:.82rem; margin:0 0 22px; line-height:1.5; }}
   .card {{ background:var(--surface); border:1px solid var(--line); border-radius:14px;
            padding:20px; margin-bottom:16px; }}
@@ -280,26 +332,36 @@ def render_dashboard(cfg, state, history):
            padding:16px 20px; font-size:.79rem; color:var(--ink2); line-height:1.6; }}
   .note b {{ color:var(--ink); font-weight:600; }}
   footer {{ margin-top:20px; font-size:.72rem; color:var(--muted); line-height:1.6; }}
+  @media (max-width:520px) {{
+    .head {{ flex-wrap:wrap; }}
+    .tile {{ text-align:left; width:100%; }}
+  }}
 </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>iTunes Top Movies — US</h1>
-    <p class="lede">Chart position, rechecked hourly.</p>
+    <div class="topline">
+      <h1>iTunes Top Movies &mdash; US</h1>
+      <span id="live"></span>
+    </div>
+    <p class="lede">Chart position, rechecked hourly. This page refreshes its own
+       numbers every few minutes, so what you see is current without reloading.</p>
     {''.join(cards)}
     <div class="note">
-      <b>This is the pure movie ranking, with bundles taken out.</b> Apple's
+      <b>This is the pure movie ranking, with bundles taken out.</b> Apple&rsquo;s
       chart feed lists individual films only. The Apple TV app numbers its chart
-      with Movie Bundles mixed in — multi-film collections like "Warner Bros
-      Essentials 20-Film Bundle" — so the position shown there is always higher.
-      On 17 Sep, #32 here was #45 in the app, with 13 bundles sitting in between.
-      Neither number is wrong; they count different things. This one counts films.
+      with Movie Bundles mixed in &mdash; multi-film collections like &ldquo;Warner
+      Bros Essentials 20-Film Bundle&rdquo; &mdash; so the position shown there is
+      always higher. On 17 Sep, #32 here was #45 in the app, with 13 bundles sitting
+      in between. Neither number is wrong; they count different things. This one
+      counts films.
     </div>
     <footer>
-      Checked {escape(checked or '—')} · Apple's feed last rebuilt {escape(feed_updated or '—')}<br>
-      Source: itunes.apple.com/us/rss/topmovies · chart runs ~78 films deep
+      <span id="foot">Checked {escape(checked or '—')} &middot; Apple&rsquo;s feed last rebuilt {escape(feed_updated or '—')}</span><br>
+      Source: itunes.apple.com/us/rss/topmovies &middot; chart runs ~78 films deep
     </footer>
   </div>
+{LIVE_SCRIPT}
 </body>
 </html>
 """
