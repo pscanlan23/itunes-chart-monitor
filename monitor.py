@@ -508,13 +508,21 @@ def main():
     sf, ch, lim = cfg["storefront"], cfg["chart"], cfg["chart_limit"]
 
     if args.test_email:
+        rules = recipient_rules(cfg)
+        targets = [r["address"] for r in rules if (r.get("alerts") or "").lower() != "none"]
+        print(f"Recipients resolved: {targets or '(none)'}")
+        if not targets:
+            print("::error::No recipients. Set the ITUNES_MONITOR_RECIPIENTS secret to a "
+                  "JSON array like [{\"address\":\"you@example.com\",\"alerts\":\"every_change\"}]")
+            sys.exit(1)
         ok = send_email(
             cfg,
             "iTunes chart monitor: test email",
             "This is a test from the iTunes chart monitor.\n\n"
             "If you are reading this, alerting is wired up correctly and you will "
             "get a message when the chart position changes.\n\n"
-            "Dashboard: https://pscanlan23.github.io/itunes-chart-monitor/")
+            "Dashboard: " + cfg.get("dashboard_url", ""),
+            to=targets)
         print("RESULT: sent" if ok else "RESULT: not sent")
         sys.exit(0 if ok else 1)
 
