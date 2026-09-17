@@ -36,6 +36,7 @@ jobs:
         env:
           ITUNES_MONITOR_SMTP_USER: ${{ secrets.ITUNES_MONITOR_SMTP_USER }}
           ITUNES_MONITOR_SMTP_PASS: ${{ secrets.ITUNES_MONITOR_SMTP_PASS }}
+          ITUNES_MONITOR_RECIPIENTS: ${{ secrets.ITUNES_MONITOR_RECIPIENTS }}
         run: python3 monitor.py
 
       - name: Publish dashboard as the Pages index

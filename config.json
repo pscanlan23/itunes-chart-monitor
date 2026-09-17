@@ -17,13 +17,8 @@
     "smtp_port": 587,
     "smtp_user_env": "ITUNES_MONITOR_SMTP_USER",
     "smtp_pass_env": "ITUNES_MONITOR_SMTP_PASS",
-    "recipients": [
-      {
-        "address": "paul@legionm.com",
-        "alerts": "every_change",
-        "_comment": "every_change | significant (uses min_move) | milestones | none"
-      }
-    ]
+    "recipients": [],
+    "_recipients_note": "Recipients live in the ITUNES_MONITOR_RECIPIENTS GitHub Actions secret, not here - this repo is public. This list is only a local-testing fallback."
   },
   "dashboard_path": "dashboard.html",
   "state_path": "state.json",

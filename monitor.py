@@ -304,12 +304,30 @@ def should_notify(rule, old_rank, new_rank):
 
 
 def recipient_rules(cfg):
-    """Normalise config into a list of recipient rules, old format included."""
+    """
+    Who gets alerted, and how often.
+
+    Recipients live in the ITUNES_MONITOR_RECIPIENTS secret, NOT in config.json,
+    because this repository is public and config.json is world-readable. The
+    secret holds a JSON array:
+
+        [{"address": "a@b.com", "alerts": "significant", "min_move": 5}, ...]
+
+    config.json is only a fallback for local testing.
+    """
+    raw = os.environ.get("ITUNES_MONITOR_RECIPIENTS", "").strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            return [r if isinstance(r, dict) else {"address": r} for r in parsed]
+        except (ValueError, TypeError) as exc:
+            print(f"[warn] ITUNES_MONITOR_RECIPIENTS is not valid JSON ({exc}); "
+                  f"falling back to config.json")
+
     email_cfg = cfg.get("email", {})
     rules = email_cfg.get("recipients")
     if rules:
         return [r if isinstance(r, dict) else {"address": r} for r in rules]
-    # legacy: a plain "to" list, everyone on every change
     return [{"address": a, "alerts": "every_change"} for a in email_cfg.get("to", [])]
 
 
