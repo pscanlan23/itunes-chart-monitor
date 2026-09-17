@@ -207,7 +207,7 @@ def render_dashboard(cfg, state, history):
           <div class="headtext">
             <h2>{title_html}</h2>
             <div class="{rank_class}">{escape(rank_display)}</div>
-            <div class="sub">among individual films · US store</div>
+            <div class="sub">Pure movie ranking &mdash; Movie Bundles excluded &middot; US store</div>
           </div>
           {genre_block}
         </div>
@@ -288,11 +288,12 @@ def render_dashboard(cfg, state, history):
     <p class="lede">Chart position, rechecked hourly.</p>
     {''.join(cards)}
     <div class="note">
-      <b>Why this differs from the Apple TV app.</b> Apple's chart feed lists only
-      individual films. The app's numbering also counts Movie Bundles, so the
-      position shown there is higher than the one here — on 17 Sep, #32 here was
-      #45 in the app, with 13 bundles in between. Neither is wrong; they count
-      different things. The number above is rank among films.
+      <b>This is the pure movie ranking, with bundles taken out.</b> Apple's
+      chart feed lists individual films only. The Apple TV app numbers its chart
+      with Movie Bundles mixed in — multi-film collections like "Warner Bros
+      Essentials 20-Film Bundle" — so the position shown there is always higher.
+      On 17 Sep, #32 here was #45 in the app, with 13 bundles sitting in between.
+      Neither number is wrong; they count different things. This one counts films.
     </div>
     <footer>
       Checked {escape(checked or '—')} · Apple's feed last rebuilt {escape(feed_updated or '—')}<br>
