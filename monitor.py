@@ -141,22 +141,27 @@ def send_email(cfg, subject, body):
     email_cfg = cfg["email"]
     if not email_cfg.get("enabled", True):
         print(f"[email disabled] {subject}")
-        return
+        return False
     user = os.environ.get(email_cfg["smtp_user_env"])
     password = os.environ.get(email_cfg["smtp_pass_env"])
     if not user or not password:
         print(f"[email skipped] Missing {email_cfg['smtp_user_env']} / "
               f"{email_cfg['smtp_pass_env']} environment variables.")
-        return
+        return False
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = email_cfg.get("from") or user
     msg["To"] = ", ".join(email_cfg["to"])
-    with smtplib.SMTP(email_cfg["smtp_host"], email_cfg["smtp_port"]) as server:
-        server.starttls()
-        server.login(user, password)
-        server.sendmail(msg["From"], email_cfg["to"], msg.as_string())
+    try:
+        with smtplib.SMTP(email_cfg["smtp_host"], email_cfg["smtp_port"], timeout=30) as server:
+            server.starttls()
+            server.login(user, password)
+            server.sendmail(msg["From"], email_cfg["to"], msg.as_string())
+    except Exception as exc:
+        print(f"[email FAILED] {type(exc).__name__}: {exc}")
+        return False
     print(f"[email sent] {subject}")
+    return True
 
 
 # Kept as a plain (non-f) string so braces need no doubling.
@@ -375,6 +380,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Check and render, but don't send email")
     parser.add_argument("--resolve-only", action="store_true", help="Print chart matches and exit")
     parser.add_argument("--inspect-chart", action="store_true", help="Dump raw feed shape")
+    parser.add_argument("--test-email", action="store_true",
+                        help="Send one test email and exit non-zero if it fails")
     args = parser.parse_args()
 
     cfg = load_json(HERE / "config.json", None)
@@ -383,6 +390,17 @@ def main():
         sys.exit(1)
 
     sf, ch, lim = cfg["storefront"], cfg["chart"], cfg["chart_limit"]
+
+    if args.test_email:
+        ok = send_email(
+            cfg,
+            "iTunes chart monitor: test email",
+            "This is a test from the iTunes chart monitor.\n\n"
+            "If you are reading this, alerting is wired up correctly and you will "
+            "get a message when the chart position changes.\n\n"
+            "Dashboard: https://pscanlan23.github.io/itunes-chart-monitor/")
+        print("RESULT: sent" if ok else "RESULT: not sent")
+        sys.exit(0 if ok else 1)
 
     if args.inspect_chart:
         chart = fetch_chart(sf, ch, lim)

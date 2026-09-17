@@ -1,0 +1,19 @@
+name: Send test email
+# Manual only. Verifies the SMTP secrets actually work, without waiting
+# for the chart to move. Fails the run if the mail does not go out.
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Send test email
+        env:
+          ITUNES_MONITOR_SMTP_USER: ${{ secrets.ITUNES_MONITOR_SMTP_USER }}
+          ITUNES_MONITOR_SMTP_PASS: ${{ secrets.ITUNES_MONITOR_SMTP_PASS }}
+        run: python3 monitor.py --test-email
