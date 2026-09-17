@@ -137,7 +137,7 @@ def resolve_film(film, storefront, entries=None):
     return None
 
 
-def send_email(cfg, subject, body):
+def send_email(cfg, subject, body, to=None):
     email_cfg = cfg["email"]
     if not email_cfg.get("enabled", True):
         print(f"[email disabled] {subject}")
@@ -151,16 +151,20 @@ def send_email(cfg, subject, body):
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = email_cfg.get("from") or user
-    msg["To"] = ", ".join(email_cfg["to"])
+    recipients = to or email_cfg.get("to") or []
+    if not recipients:
+        print("[email skipped] no recipients")
+        return False
+    msg["To"] = ", ".join(recipients)
     try:
         with smtplib.SMTP(email_cfg["smtp_host"], email_cfg["smtp_port"], timeout=30) as server:
             server.starttls()
             server.login(user, password)
-            server.sendmail(msg["From"], email_cfg["to"], msg.as_string())
+            server.sendmail(msg["From"], recipients, msg.as_string())
     except Exception as exc:
         print(f"[email FAILED] {type(exc).__name__}: {exc}")
         return False
-    print(f"[email sent] {subject}")
+    print(f"[email sent -> {', '.join(recipients)}] {subject}")
     return True
 
 
@@ -213,6 +217,100 @@ LIVE_SCRIPT = """
 })();
 </script>
 """
+
+
+def build_body(name, st, old_rank, old_grank, now, cfg):
+    """Plain-text email body carrying the full current picture, not just the move."""
+    def line(label, value, was=None):
+        dash_ch = "\u2014"
+        v = f"#{value}" if isinstance(value, int) else (value if value else dash_ch)
+        w = f"   (was #{was})" if isinstance(was, int) else ("   (was not on chart)" if was is None and isinstance(value, int) else "")
+        return f"  {label:<26}{v}{w}"
+
+    rows = [line("Overall", st.get("rank"), old_rank)]
+    if st.get("genre"):
+        rows.append(line(f"In {st['genre']}", st.get("genre_rank"), old_grank))
+
+    detail = []
+    if st.get("price"):
+        detail.append(f"  {'Buy':<26}{st['price']}")
+    if st.get("rental_price"):
+        detail.append(f"  {'Rent':<26}{st['rental_price']}")
+    if st.get("release_date"):
+        detail.append(f"  {'Released':<26}{st['release_date']}")
+
+    dash = cfg.get("dashboard_url", "")
+    parts = [
+        "CURRENT POSITION",
+        "",
+        *rows,
+        "",
+        *(detail + [""] if detail else []),
+        f"Checked {now}",
+        "Apple's feed last rebuilt " + (st.get("feed_updated") or "\u2014"),
+        "",
+        "This is the pure movie ranking, with Movie Bundles excluded. The Apple TV",
+        "app counts bundles in its numbering, so the position shown there will be",
+        "higher than the number above.",
+        "",
+    ]
+    if st.get("url"):
+        parts.append(f"Store:     {st['url']}")
+    if dash:
+        parts.append(f"Dashboard: {dash}")
+    return "\n".join(parts)
+
+
+MILESTONES = [5, 10, 25, 50]
+
+
+def crossed_milestone(old_rank, new_rank):
+    """True if the film crossed one of the milestone thresholds in either direction."""
+    if old_rank is None or new_rank is None:
+        return True                      # entering or leaving the chart always counts
+    for m in MILESTONES:
+        if (old_rank > m >= new_rank) or (new_rank > m >= old_rank):
+            return True
+    return False
+
+
+def should_notify(rule, old_rank, new_rank):
+    """
+    Decide whether one recipient wants to hear about this change.
+
+    rule is a dict like {"address": ..., "alerts": "significant", "min_move": 5}.
+
+    Modes:
+      every_change - any movement at all
+      significant  - moves of at least min_move places (default 5)
+      milestones   - only crossing top 5 / 10 / 25 / 50
+      none         - muted
+
+    Entering or dropping off the chart always notifies, except when muted:
+    those are the events nobody wants to miss.
+    """
+    mode = (rule.get("alerts") or "every_change").lower()
+    if mode == "none":
+        return False
+    if old_rank is None or new_rank is None:
+        return True                      # entered or dropped off
+    if mode == "every_change":
+        return True
+    if mode == "milestones":
+        return crossed_milestone(old_rank, new_rank)
+    if mode == "significant":
+        return abs(new_rank - old_rank) >= int(rule.get("min_move", 5))
+    return True                          # unknown mode -> don't silently drop alerts
+
+
+def recipient_rules(cfg):
+    """Normalise config into a list of recipient rules, old format included."""
+    email_cfg = cfg.get("email", {})
+    rules = email_cfg.get("recipients")
+    if rules:
+        return [r if isinstance(r, dict) else {"address": r} for r in rules]
+    # legacy: a plain "to" list, everyone on every change
+    return [{"address": a, "alerts": "every_change"} for a in email_cfg.get("to", [])]
 
 
 def render_dashboard(cfg, state, history):
@@ -470,24 +568,33 @@ def main():
         if new_rank != old_rank:
             if old_rank is None and new_rank is not None:
                 subject = f"{name} entered the iTunes chart at #{new_rank}"
-                body = f"{name} appeared at #{new_rank} among individual films{gtxt} as of {now}."
+                headline = f"{name} has entered the iTunes Top Movies chart."
             elif old_rank is not None and new_rank is None:
                 subject = f"{name} dropped off the iTunes chart"
-                body = f"{name} was #{old_rank} and is no longer listed as of {now}."
+                headline = f"{name} is no longer listed on the iTunes Top Movies chart."
             else:
                 direction = "up" if new_rank < old_rank else "down"
-                subject = f"{name} moved {direction} on iTunes: #{old_rank} -> #{new_rank}"
-                body = f"{name} moved from #{old_rank} to #{new_rank}{gtxt} as of {now}."
-            body += ("\n\nNote: this is rank among individual films. The Apple TV app "
-                     "numbers its chart with Movie Bundles included, so the position "
-                     "shown there will be higher.")
+                places = abs(new_rank - old_rank)
+                subject = f"{name} moved {direction} {places} on iTunes: #{old_rank} -> #{new_rank}"
+                headline = (f"{name} moved {direction} {places} "
+                            f"{'place' if places == 1 else 'places'} on the iTunes Top Movies chart.")
+            body = headline + "\n\n" + build_body(
+                name, state[name], old_rank, old_grank, now, cfg)
             print(subject)
-            if not args.dry_run:
-                send_email(cfg, subject, body)
+
+            wanted = [r["address"] for r in recipient_rules(cfg)
+                      if should_notify(r, old_rank, new_rank)]
+            muted = [r["address"] for r in recipient_rules(cfg)
+                     if not should_notify(r, old_rank, new_rank)]
+            if muted:
+                print(f"  (below threshold for: {', '.join(muted)})")
+            if wanted and not args.dry_run:
+                send_email(cfg, subject, body, to=wanted)
+            elif not wanted:
+                print("  (no recipient wanted this one)")
         else:
             shown = f"#{new_rank}" if new_rank else "off chart"
-            extra = "" if genre_rank == old_grank else f" [genre {old_grank} -> {genre_rank}]"
-            print(f"{name}: no change ({shown}{gtxt}){extra}")
+            print(f"{name}: no change ({shown}{gtxt})")
 
     limit = cfg.get("history_limit")
     if limit:

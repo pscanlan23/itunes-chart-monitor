@@ -208,3 +208,35 @@ The chart runs about 78 entries deep; `limit=100` asks for all of them.
 Note the iTunes **Search** API is not usable for resolving these films — it
 returns 0 results even for titles that are live and charting. `--resolve-only`
 matches against the chart feed instead.
+
+## Email alerts
+
+Who gets told, and how often, is set per recipient in `config.json`:
+
+```json
+"recipients": [
+  { "address": "paul@legionm.com",  "alerts": "every_change" },
+  { "address": "team@legionm.com",  "alerts": "significant", "min_move": 5 },
+  { "address": "board@legionm.com", "alerts": "milestones" },
+  { "address": "someone@legionm.com", "alerts": "none" }
+]
+```
+
+| Mode | Sends when |
+|---|---|
+| `every_change` | any movement at all, including #31 to #32 |
+| `significant` | the rank moves by `min_move` places or more (default 5) |
+| `milestones` | the film crosses into or out of the top 5, 10, 25 or 50 |
+| `none` | never — mutes an address without removing it |
+
+**Entering or dropping off the chart always sends**, whatever the mode, except
+for `none`. Those are the events nobody wants to miss.
+
+One email goes out per change, addressed to everyone whose rule matched, so
+nobody gets a duplicate. The body carries the current overall and genre rank,
+both previous values, price, release date, Apple's feed timestamp, and links to
+the store page and dashboard.
+
+To verify the SMTP secrets without waiting for the chart to move, run the
+**Send test email** workflow from the Actions tab. It fails the run if the mail
+does not go out, so a green check means it genuinely sent.

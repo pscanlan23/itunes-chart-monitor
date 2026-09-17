@@ -12,17 +12,22 @@
   ],
   "email": {
     "enabled": true,
-    "to": [
-      "paul@legionm.com"
-    ],
     "from": "paul@legionm.com",
     "smtp_host": "smtp.gmail.com",
     "smtp_port": 587,
     "smtp_user_env": "ITUNES_MONITOR_SMTP_USER",
-    "smtp_pass_env": "ITUNES_MONITOR_SMTP_PASS"
+    "smtp_pass_env": "ITUNES_MONITOR_SMTP_PASS",
+    "recipients": [
+      {
+        "address": "paul@legionm.com",
+        "alerts": "every_change",
+        "_comment": "every_change | significant (uses min_move) | milestones | none"
+      }
+    ]
   },
   "dashboard_path": "dashboard.html",
   "state_path": "state.json",
   "history_path": "history.json",
-  "history_limit": 2000
+  "history_limit": 2000,
+  "dashboard_url": "https://pscanlan23.github.io/itunes-chart-monitor/"
 }
