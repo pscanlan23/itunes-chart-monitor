@@ -97,7 +97,7 @@ These are encrypted, are not readable back out of the UI, and are not exposed to
 pull requests from forks. **Don't put them in `config.json`** — that file is
 public in this repo.
 
-### 4. Lock in the iTunes ID
+### 4. Lock in the iTunes ID (already done for Nimrods: 6797577735)
 
 After the first successful run, open `state.json` in the repo. It contains what
 the title search resolved to:
@@ -190,3 +190,21 @@ pip install -r requirements.txt
 python3 monitor.py --resolve-only   # print iTunes matches, change nothing
 python3 monitor.py --dry-run        # check and render, but don't email
 ```
+
+## Data source
+
+Chart data comes from the legacy iTunes RSS feed:
+
+```
+https://itunes.apple.com/us/rss/topmovies/limit=100/json
+```
+
+Apple's newer `rss.marketingtools.apple.com` JSON API does **not** serve movie
+charts — it 404s on every limit, and its own generator lists only Music,
+Podcasts, Apps, Books and Audio Books. Use the legacy feed above.
+
+The chart runs about 78 entries deep; `limit=100` asks for all of them.
+
+Note the iTunes **Search** API is not usable for resolving these films — it
+returns 0 results even for titles that are live and charting. `--resolve-only`
+matches against the chart feed instead.

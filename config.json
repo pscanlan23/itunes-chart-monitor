@@ -1,18 +1,20 @@
 {
   "storefront": "us",
-  "chart": "top-movies",
-  "chart_limit": 200,
+  "chart": "topmovies",
+  "chart_limit": 100,
   "films": [
     {
       "name": "Nimrods",
       "search_term": "Nimrods",
-      "itunes_id": null,
-      "notes": "Set itunes_id once confirmed via the resolver output, to lock in the exact listing and skip fuzzy search matching."
+      "itunes_id": 6797577735,
+      "notes": "Confirmed from the live chart on 2026-09-17 (was ranked #32)."
     }
   ],
   "email": {
     "enabled": true,
-    "to": ["paul@legionm.com"],
+    "to": [
+      "paul@legionm.com"
+    ],
     "from": "paul@legionm.com",
     "smtp_host": "smtp.gmail.com",
     "smtp_port": 587,

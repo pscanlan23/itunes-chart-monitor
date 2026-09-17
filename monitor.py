@@ -38,9 +38,9 @@ import requests
 
 HERE = Path(__file__).resolve().parent
 SEARCH_API = "https://itunes.apple.com/search"
-CHART_FEED_TMPL = (
-    "https://rss.marketingtools.apple.com/api/v2/{storefront}/movies/{chart}/{limit}/movies.json"
-)
+# Apple's newer marketingtools JSON API does NOT serve movie charts (404 on every
+# limit). The legacy iTunes RSS feed does, and is the subscribable one.
+CHART_FEED_TMPL = "https://itunes.apple.com/{storefront}/rss/{chart}/limit={limit}/json"
 
 
 def load_json(path, default):
@@ -61,46 +61,51 @@ def save_json(path, data):
         json.dump(data, f, indent=2)
 
 
-def resolve_film(film, storefront):
+def resolve_film(film, storefront, chart_results=None):
     """
-    Return the best-guess iTunes listing for a film config entry.
-    If itunes_id is set in config, that's authoritative and we skip search.
-    Otherwise we search by title and return the top candidate(s) so the
-    caller (or --resolve-only) can disambiguate.
+    Work out which chart entry a configured film refers to.
+
+    itunes_id in config is authoritative. Otherwise match by name against the
+    chart itself -- note the iTunes *Search* API does not index these titles
+    (it returns 0 results even for films that are live and charting), so the
+    chart feed is the only reliable place to resolve from.
     """
     if film.get("itunes_id"):
         return {"id": str(film["itunes_id"]), "name": film["name"], "matched_by": "itunes_id"}
 
-    params = {
-        "term": film["search_term"],
-        "country": storefront,
-        "entity": "movie",
-        "limit": 10,
-    }
-    resp = requests.get(SEARCH_API, params=params, timeout=15)
-    resp.raise_for_status()
-    results = resp.json().get("results", [])
-    if not results:
-        return None
-
-    # Prefer an exact (case-insensitive) title match; otherwise take the first hit.
-    exact = [r for r in results if r.get("trackName", "").strip().lower() == film["search_term"].strip().lower()]
-    best = exact[0] if exact else results[0]
-    return {
-        "id": str(best.get("trackId")),
-        "name": best.get("trackName"),
-        "artist": best.get("artistName"),
-        "url": best.get("trackViewUrl"),
-        "matched_by": "exact_search" if exact else "fuzzy_search",
-        "all_candidates": results,
-    }
+    term = (film.get("search_term") or film["name"]).strip().lower()
+    for e in (chart_results or []):
+        if e["name"].strip().lower() == term:
+            return {**e, "matched_by": "chart_exact"}
+    for e in (chart_results or []):
+        if term in e["name"].strip().lower():
+            return {**e, "matched_by": "chart_partial"}
+    return None
 
 
 def fetch_chart(storefront, chart, limit):
+    """
+    Fetch the chart and normalise it to a simple ranked list of
+    {"id", "name", "url"} so the rest of the script stays simple.
+
+    The legacy feed nests these: entry[i]["id"]["attributes"]["im:id"] and
+    entry[i]["im:name"]["label"]. Rank is just position in the list.
+    """
     url = CHART_FEED_TMPL.format(storefront=storefront, chart=chart, limit=limit)
     resp = requests.get(url, timeout=15)
     resp.raise_for_status()
-    return resp.json().get("feed", {}).get("results", [])
+    entries = resp.json().get("feed", {}).get("entry", []) or []
+    results = []
+    for e in entries:
+        try:
+            results.append({
+                "id": str(e["id"]["attributes"]["im:id"]),
+                "name": e["im:name"]["label"],
+                "url": e["id"]["label"],
+            })
+        except (KeyError, TypeError):
+            continue  # skip malformed entries rather than dying mid-run
+    return results
 
 
 def find_rank(chart_results, film_id, film_name):
@@ -229,8 +234,10 @@ def main():
         return
 
     if args.resolve_only:
+        chart_results = fetch_chart(cfg["storefront"], cfg["chart"], cfg["chart_limit"])
+        print(f"Chart has {len(chart_results)} entries.\n")
         for film in cfg["films"]:
-            match = resolve_film(film, cfg["storefront"])
+            match = resolve_film(film, cfg["storefront"], chart_results)
             print(f"\n=== {film['name']} ===")
             print(json.dumps(match, indent=2))
         return
@@ -243,7 +250,7 @@ def main():
 
     for film in cfg["films"]:
         name = film["name"]
-        resolved = resolve_film(film, cfg["storefront"])
+        resolved = resolve_film(film, cfg["storefront"], chart_results)
         film_id = resolved["id"] if resolved else None
 
         new_rank = find_rank(chart_results, film_id, name)
