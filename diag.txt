@@ -1,0 +1,31 @@
+=== chart feed ===
+HTTP 404  bytes=34
+--- first 400 bytes ---
+{"status":404,"error":"Not Found"}
+
+=== search api ===
+HTTP 200  bytes=42
+--- first 800 bytes ---
+
+
+
+{
+ "resultCount":0,
+ "results": []
+}
+
+
+
+
+=== monitor.py output ===
+Traceback (most recent call last):
+  File "/home/runner/work/itunes-chart-monitor/itunes-chart-monitor/monitor.py", line 288, in <module>
+    main()
+  File "/home/runner/work/itunes-chart-monitor/itunes-chart-monitor/monitor.py", line 241, in main
+    chart_results = fetch_chart(cfg["storefront"], cfg["chart"], cfg["chart_limit"])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/itunes-chart-monitor/itunes-chart-monitor/monitor.py", line 102, in fetch_chart
+    resp.raise_for_status()
+  File "/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/requests/models.py", line 1167, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 404 Client Error: Not Found for url: https://rss.marketingtools.apple.com/api/v2/us/movies/top-movies/200/movies.json
